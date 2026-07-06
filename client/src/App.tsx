@@ -2,8 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import ws from "./services/websocket";
 import LobbyScreen from "./components/LobbyScreen";
 import WaitingRoom from "./components/WaitingRoom";
+import WordInput from "./components/WordInput";
+import DrawingCanvas from "./components/DrawingCanvas";
+import GuessingScreen from "./components/GuessingScreen";
 
-type Screen = "lobby" | "waiting";
+type Screen = "lobby" | "waiting" | "word_selection" | "drawing" | "guessing";
 
 interface PlayerInfo {
     id: string;
@@ -11,11 +14,27 @@ interface PlayerInfo {
     ready: boolean;
 }
 
+interface ChainEntry {
+    playerId: string;
+    pseudo: string;
+    type: "word" | "drawing" | "guess";
+    content: string;
+}
+
 export default function App() {
     const [screen, setScreen] = useState<Screen>("lobby");
     const [myId, setMyId] = useState("");
     const [players, setPlayers] = useState<PlayerInfo[]>([]);
     const [isReady, setIsReady] = useState(false);
+    const [submitted, setSubmitted] = useState(false);
+
+    const [drawingPrompt, setDrawingPrompt] = useState("");
+    const [drawingTime, setDrawingTime] = useState(90);
+
+    const [guessingDataUrl, setGuessingDataUrl] = useState("");
+    const [guessingTime, setGuessingTime] = useState(90);
+
+    const [waitingCount, setWaitingCount] = useState<{ submitted: number; total: number } | null>(null);
     const [notification, setNotification] = useState<string | null>(null);
 
     const showNotification = (msg: string) => {
@@ -34,6 +53,8 @@ export default function App() {
                     setPlayers(payload.players);
                     setScreen("waiting");
                     setIsReady(false);
+                    setSubmitted(false);
+                    setWaitingCount(null);
                     break;
                 }
                 case "PLAYER_JOINED": {
@@ -64,6 +85,40 @@ export default function App() {
                     showNotification("La partie commence !");
                     break;
                 }
+                case "PHASE_WORD_SELECTION": {
+                    setScreen("word_selection");
+                    setSubmitted(false);
+                    setWaitingCount(null);
+                    break;
+                }
+                case "PHASE_DRAWING": {
+                    const { prompt, timeLeft } = msg.payload as { prompt: string; timeLeft: number };
+                    setDrawingPrompt(prompt);
+                    setDrawingTime(timeLeft);
+                    setScreen("drawing");
+                    setSubmitted(false);
+                    setWaitingCount(null);
+                    break;
+                }
+                case "PHASE_GUESSING": {
+                    const { dataUrl, timeLeft } = msg.payload as { dataUrl: string; timeLeft: number };
+                    setGuessingDataUrl(dataUrl);
+                    setGuessingTime(timeLeft);
+                    setScreen("guessing");
+                    setSubmitted(false);
+                    setWaitingCount(null);
+                    break;
+                }
+                case "WAITING_FOR_OTHERS": {
+                    const count = msg.payload as { submitted: number; total: number };
+                    setWaitingCount(count);
+                    break;
+                }
+                case "ERROR": {
+                    const { message } = msg.payload as { message: string };
+                    showNotification(`⚠️ ${message}`);
+                    break;
+                }
             }
         });
 
@@ -82,20 +137,52 @@ export default function App() {
         setIsReady(true);
     }, []);
 
+    const handleSubmitWord = useCallback((word: string) => {
+        ws.send({ type: "SUBMIT_WORD", payload: { word } });
+        setSubmitted(true);
+    }, []);
+
+    const handleSubmitDrawing = useCallback((dataUrl: string) => {
+        ws.send({ type: "SUBMIT_DRAWING", payload: { dataUrl } });
+        setSubmitted(true);
+    }, []);
+
+    const handleSubmitGuess = useCallback((guess: string) => {
+        ws.send({ type: "SUBMIT_GUESS", payload: { guess } });
+        setSubmitted(true);
+    }, []);
+
     return (
         <div className="app">
             {notification && <div className="notification">{notification}</div>}
 
-            {screen === "lobby" && (
-                <LobbyScreen onJoin={handleJoin} />
-            )}
+            {screen === "lobby" && <LobbyScreen onJoin={handleJoin} />}
 
             {screen === "waiting" && (
-                <WaitingRoom
-                    players={players}
-                    myId={myId}
-                    isReady={isReady}
-                    onReady={handleReady}
+                <WaitingRoom players={players} myId={myId} isReady={isReady} onReady={handleReady} />
+            )}
+
+            {screen === "word_selection" && (
+                <WordInput onSubmit={handleSubmitWord} submitted={submitted} waitingCount={waitingCount} />
+            )}
+
+            {screen === "drawing" && (
+                <DrawingCanvas
+                    prompt={drawingPrompt}
+                    timeLeft={drawingTime}
+                    onSubmit={handleSubmitDrawing}
+                    submitted={submitted}
+                    waitingCount={waitingCount}
+                />
+            )}
+
+            {screen === "guessing" && (
+                <GuessingScreen
+                    dataUrl={guessingDataUrl}
+                    timeLeft={guessingTime}
+                    onSubmit={handleSubmitGuess}
+                    submitted={submitted}
+                    waitingCount={waitingCount}
                 />
             )}
         </div>
