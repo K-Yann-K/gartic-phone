@@ -26,7 +26,7 @@ export default function GuessingScreen({ dataUrl, timeLeft, onSubmit, submitted,
         return (
             <div className="phase-screen">
                 <div className="phase-card">
-                    <div className="submitted-icon">✅</div>
+                    <div className="submitted-icon"></div>
                     <h2>Réponse envoyée !</h2>
                     {waitingCount && (
                         <p className="waiting-progress">
@@ -45,7 +45,7 @@ export default function GuessingScreen({ dataUrl, timeLeft, onSubmit, submitted,
         <div className="phase-screen">
             <div className="guessing-card">
                 <div className="guessing-header">
-                    <h2>🔍 Qu'est-ce que c'est ?</h2>
+                    <h2>Qu'est-ce que c'est ?</h2>
                     <div className="timer">{timeLeft}s</div>
                 </div>
                 <div className="drawing-preview">
@@ -62,7 +62,9 @@ export default function GuessingScreen({ dataUrl, timeLeft, onSubmit, submitted,
                         maxLength={100}
                     />
                     {error && <span className="error-text">{error}</span>}
-                    <button className="btn-primary" onClick={handleSubmit}>✅ Valider</button>
+                    <button className="btn-primary" onClick={handleSubmit}>
+                        Valider
+                    </button>
                 </div>
             </div>
         </div>

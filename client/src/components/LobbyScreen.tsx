@@ -26,9 +26,8 @@ export default function LobbyScreen({ onJoin }: Props) {
         <div className="lobby-screen">
             <div className="lobby-card">
                 <div className="logo">
-                    
                     <h1>Gartic Phone</h1>
-                    <p className="subtitle">sous titre à trouver</p>
+                    <p className="subtitle">Dessine, devine, rigole !</p>
                 </div>
                 <div className="input-group">
                     <input

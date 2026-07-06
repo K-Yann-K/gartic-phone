@@ -28,7 +28,7 @@ export default function WordInput({ onSubmit, submitted, waitingCount }: Props) 
         return (
             <div className="phase-screen">
                 <div className="phase-card">
-                    <div className="submitted-icon">✅</div>
+                    <div className="submitted-icon"></div>
                     <h2>Mot envoyé !</h2>
                     {waitingCount && (
                         <p className="waiting-progress">
@@ -46,7 +46,7 @@ export default function WordInput({ onSubmit, submitted, waitingCount }: Props) 
     return (
         <div className="phase-screen">
             <div className="phase-card">
-                <div className="phase-icon">💭</div>
+                <div className="phase-icon"></div>
                 <h2>Tour 1 — Choisir un mot</h2>
                 <p className="phase-description">
                     Entre un mot ou une expression que les autres devront dessiner.

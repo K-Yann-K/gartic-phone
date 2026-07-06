@@ -39,7 +39,7 @@ export default function WaitingRoom({ players, myId, isReady, onReady }: Props) 
                                 {player.id === myId && <span className="you-tag"> (toi)</span>}
                             </span>
                             <span className="ready-badge">
-                                {player.ready ? "Prêt" : " Pas prêt"}
+                                {player.ready ? "Prêt" : "Pas prêt"}
                             </span>
                         </div>
                     ))}
