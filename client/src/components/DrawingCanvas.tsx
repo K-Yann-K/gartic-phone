@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from "react";
+import { Pencil, Square, Circle, Triangle } from "lucide-react";
 
 interface Props {
     prompt: string;
@@ -14,31 +15,30 @@ const COLORS = [
     "#7f8c8d", "#c0392b", "#d35400", "#8e44ad",
 ];
 
+type Shape = "pencil" | "rectangle" | "ellipse" | "triangle";
+
 export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, waitingCount }: Props) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const snapshotRef = useRef<ImageData | null>(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [color, setColor] = useState("#1a1a1a");
     const [brushSize, setBrushSize] = useState(4);
+    const [shape, setShape] = useState<Shape>("pencil");
     const [timeRemaining, setTimeRemaining] = useState(timeLeft);
+    const startPos = useRef<{ x: number; y: number } | null>(null);
     const lastPos = useRef<{ x: number; y: number } | null>(null);
 
-    // Countdown timer
     useEffect(() => {
         if (submitted) return;
         const interval = setInterval(() => {
             setTimeRemaining(t => {
-                if (t <= 1) {
-                    clearInterval(interval);
-                    handleSubmit();
-                    return 0;
-                }
+                if (t <= 1) { clearInterval(interval); handleSubmit(); return 0; }
                 return t - 1;
             });
         }, 1000);
         return () => clearInterval(interval);
     }, [submitted]);
 
-    // White background
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -54,15 +54,9 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
         const scaleY = canvas.height / rect.height;
         if ("touches" in e) {
             const touch = e.touches[0];
-            return {
-                x: (touch.clientX - rect.left) * scaleX,
-                y: (touch.clientY - rect.top) * scaleY
-            };
+            return { x: (touch.clientX - rect.left) * scaleX, y: (touch.clientY - rect.top) * scaleY };
         }
-        return {
-            x: (e.clientX - rect.left) * scaleX,
-            y: (e.clientY - rect.top) * scaleY
-        };
+        return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
     };
 
     const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
@@ -70,8 +64,15 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
         e.preventDefault();
         const canvas = canvasRef.current;
         if (!canvas) return;
+        const ctx = canvas.getContext("2d")!;
+        const pos = getPos(e, canvas);
         setIsDrawing(true);
-        lastPos.current = getPos(e, canvas);
+        startPos.current = pos;
+        lastPos.current = pos;
+        // on redessine à chaque mousemove (forme)
+        if (shape !== "pencil") {
+            snapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        }
     };
 
     const draw = (e: React.MouseEvent | React.TouchEvent) => {
@@ -79,35 +80,68 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
         e.preventDefault();
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-
+        const ctx = canvas.getContext("2d")!;
         const pos = getPos(e, canvas);
-        const last = lastPos.current;
-        if (!last) return;
 
-        ctx.beginPath();
-        ctx.moveTo(last.x, last.y);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = brushSize;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.stroke();
+        if (shape === "pencil") {
+            const last = lastPos.current;
+            if (!last) return;
+            ctx.beginPath();
+            ctx.moveTo(last.x, last.y);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = brushSize;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.stroke();
+            lastPos.current = pos;
+        } else {
+            // Restaurer le snapshot pour ne pas accumuler les formes en cours de tracé
+            if (snapshotRef.current) {
+                ctx.putImageData(snapshotRef.current, 0, 0);
+            }
+            const start = startPos.current!;
+            const w = pos.x - start.x;
+            const h = pos.y - start.y;
 
-        lastPos.current = pos;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = brushSize;
+            ctx.beginPath();
+
+            if (shape === "rectangle") {
+                ctx.strokeRect(start.x, start.y, w, h);
+
+            } else if (shape === "ellipse") {
+                ctx.ellipse(
+                    start.x + w / 2,
+                    start.y + h / 2,
+                    Math.abs(w / 2),
+                    Math.abs(h / 2),
+                    0, 0, Math.PI * 2
+                );
+                ctx.stroke();
+
+            } else if (shape === "triangle") {
+                ctx.moveTo(start.x + w / 2, start.y);
+                ctx.lineTo(start.x + w, start.y + h);
+                ctx.lineTo(start.x, start.y + h);
+                ctx.closePath();
+                ctx.stroke();
+            }
+        }
     };
 
     const stopDraw = () => {
         setIsDrawing(false);
+        startPos.current = null;
         lastPos.current = null;
+        snapshotRef.current = null;
     };
 
     const clearCanvas = () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
+        const ctx = canvas.getContext("2d")!;
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     };
@@ -115,11 +149,15 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
     const handleSubmit = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const dataUrl = canvas.toDataURL("image/png");
-        onSubmit(dataUrl);
+        onSubmit(canvas.toDataURL("image/png"));
     }, [onSubmit]);
 
-    const timerClass = timeRemaining <= 10 ? "timer urgent" : "timer";
+    const SHAPES: { id: Shape; label: React.ReactNode }[] = [
+    { id: "pencil", label: <Pencil size={20} /> },
+    { id: "rectangle", label: <Square size={20} /> },
+    { id: "ellipse", label: <Circle size={20} /> },
+    { id: "triangle", label: <Triangle size={20} /> },
+    ];
 
     if (submitted) {
         return (
@@ -132,9 +170,7 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
                             {waitingCount.submitted}/{waitingCount.total} joueurs ont soumis
                         </p>
                     )}
-                    <div className="waiting-dots">
-                        <span></span><span></span><span></span>
-                    </div>
+                    <div className="waiting-dots"><span></span><span></span><span></span></div>
                 </div>
             </div>
         );
@@ -147,7 +183,7 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
                     <span className="prompt-label">À dessiner :</span>
                     <span className="prompt-word">{prompt}</span>
                 </div>
-                <div className={timerClass}>
+                <div className={timeRemaining <= 10 ? "timer urgent" : "timer"}>
                     {timeRemaining}s
                 </div>
             </div>
@@ -164,7 +200,7 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
                     onTouchStart={startDraw}
                     onTouchMove={draw}
                     onTouchEnd={stopDraw}
-                    style={{ cursor: "crosshair" }}
+                    style={{ cursor: shape === "pencil" ? "crosshair" : "cell" }}
                 />
             </div>
 
@@ -179,6 +215,20 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
                         />
                     ))}
                 </div>
+
+                <div className="shape-picker">
+                    {SHAPES.map(s => (
+                        <button
+                            key={s.id}
+                            className={`shape-btn ${shape === s.id ? "selected" : ""}`}
+                            onClick={() => setShape(s.id)}
+                            title={s.id}
+                        >
+                            {s.label}
+                        </button>
+                    ))}
+                </div>
+
                 <div className="brush-sizes">
                     {[2, 4, 8, 16].map(size => (
                         <button
@@ -197,13 +247,10 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
                         </button>
                     ))}
                 </div>
+
                 <div className="toolbar-actions">
-                    <button className="btn-secondary" onClick={clearCanvas}>
-                        Effacer
-                    </button>
-                    <button className="btn-primary" onClick={handleSubmit}>
-                        Envoyer
-                    </button>
+                    <button className="btn-secondary" onClick={clearCanvas}>Effacer</button>
+                    <button className="btn-primary" onClick={handleSubmit}>Envoyer</button>
                 </div>
             </div>
         </div>
