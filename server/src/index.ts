@@ -47,6 +47,26 @@ app.get(
                         room.setReady(playerId);
                         break;
                     }
+                    case "SUBMIT_WORD": {
+                        const { word } = msg.payload as { word: string };
+                        if (!word?.trim()) return;
+                        room.submitWord(playerId, word);
+                        break;
+                    }
+                    case "SUBMIT_DRAWING": {
+                        const { dataUrl } = msg.payload as { dataUrl: string };
+                        room.submitDrawing(playerId, dataUrl ?? "");
+                        break;
+                    }
+                    case "SUBMIT_GUESS": {
+                        const { guess } = msg.payload as { guess: string };
+                        room.submitGuess(playerId, guess ?? "");
+                        break;
+                    }
+                    case "PLAY_AGAIN": {
+                        room.playAgain(playerId);
+                        break;
+                    }
                     default:
                         console.warn("Type de message inconnu :", msg.type);
                 }

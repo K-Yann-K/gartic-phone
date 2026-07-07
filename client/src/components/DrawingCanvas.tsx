@@ -22,6 +22,7 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
     const [timeRemaining, setTimeRemaining] = useState(timeLeft);
     const lastPos = useRef<{ x: number; y: number } | null>(null);
 
+    // Countdown timer
     useEffect(() => {
         if (submitted) return;
         const interval = setInterval(() => {
@@ -37,6 +38,7 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
         return () => clearInterval(interval);
     }, [submitted]);
 
+    // White background
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -123,7 +125,7 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
         return (
             <div className="phase-screen">
                 <div className="phase-card">
-                    <div className="submitted-icon">✅</div>
+                    <div className="submitted-icon"></div>
                     <h2>Dessin envoyé !</h2>
                     {waitingCount && (
                         <p className="waiting-progress">
@@ -145,7 +147,9 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
                     <span className="prompt-label">À dessiner :</span>
                     <span className="prompt-word">{prompt}</span>
                 </div>
-                <div className={timerClass}>{timeRemaining}s</div>
+                <div className={timerClass}>
+                    {timeRemaining}s
+                </div>
             </div>
 
             <div className="canvas-wrapper">
@@ -194,8 +198,12 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
                     ))}
                 </div>
                 <div className="toolbar-actions">
-                    <button className="btn-secondary" onClick={clearCanvas}>🗑️ Effacer</button>
-                    <button className="btn-primary" onClick={handleSubmit}>✅ Envoyer</button>
+                    <button className="btn-secondary" onClick={clearCanvas}>
+                        Effacer
+                    </button>
+                    <button className="btn-primary" onClick={handleSubmit}>
+                        Envoyer
+                    </button>
                 </div>
             </div>
         </div>

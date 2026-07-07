@@ -3,7 +3,7 @@ import type { Player } from "./Player.js";
 import type { ChainEntry, PlayerInfo } from "../types/Message.js";
 
 const DRAWING_TIME = 90;
-const GUESSING_TIME = 90;
+const GUESSING_TIME = 60;
 
 export class Room {
     public id: string;
@@ -19,6 +19,8 @@ export class Room {
     constructor(id: string) {
         this.id = id;
     }
+
+    // ─── Player management ───────────────────────────────────────────────────
 
     addPlayer(player: Player): void {
         this.players.set(player.id, player);
@@ -84,6 +86,8 @@ export class Room {
         this.resetToWaiting();
     }
 
+    // ─── Submissions ─────────────────────────────────────────────────────────
+
     submitWord(playerId: string, word: string): void {
         if (this.state !== GameState.WORD_SELECTION) return;
         this.handleSubmission(playerId, word);
@@ -98,6 +102,8 @@ export class Room {
         if (this.state !== GameState.GUESSING) return;
         this.handleSubmission(playerId, guess);
     }
+
+    // ─── Private game logic ──────────────────────────────────────────────────
 
     private startGame(): void {
         this.state = GameState.WORD_SELECTION;
@@ -188,7 +194,8 @@ export class Room {
             this.send(player.id, {
                 type: "PHASE_DRAWING",
                 payload: {
-                    prompt: lastEntry.content,
+                    // ✅ Fix : "wordToDraw" au lieu de "prompt"
+                    wordToDraw: lastEntry.content,
                     timeLeft: DRAWING_TIME
                 }
             });
@@ -213,7 +220,8 @@ export class Room {
             this.send(player.id, {
                 type: "PHASE_GUESSING",
                 payload: {
-                    dataUrl: lastEntry.content,
+                    // ✅ Fix : "drawingUrl" au lieu de "dataUrl"
+                    drawingUrl: lastEntry.content,
                     timeLeft: GUESSING_TIME
                 }
             });
@@ -233,12 +241,18 @@ export class Room {
         this.clearTimer();
 
         const result = this.chains.map(chain => ({
-            originalWord: chain[0]?.content ?? "",
-            entries: chain
+            // ✅ Fix : "startWord" + "steps" pour matcher App.tsx PHASE_RESULTS
+            startWord: chain[0]?.content ?? "",
+            steps: chain.map(e => ({
+                playerPseudo: e.pseudo,
+                type: e.type,
+                content: e.content
+            }))
         }));
 
+        // ✅ Fix : "PHASE_RESULTS" au lieu de "RESULTS"
         this.broadcast({
-            type: "RESULTS",
+            type: "PHASE_RESULTS",
             payload: { chains: result }
         });
     }
@@ -257,7 +271,10 @@ export class Room {
 
         this.broadcast({
             type: "JOINED",
-            payload: { playerId: "", players: this.getPlayerInfos() }
+            payload: {
+                playerId: "",
+                players: this.getPlayerInfos()
+            }
         });
     }
 
@@ -268,13 +285,20 @@ export class Room {
         }
     }
 
-    // Round 0: joueur i → chaîne i
-    // Round 1: joueur i → chaîne (i+1)%n  ← rotation à corriger
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    /**
+     * ✅ Fix rotation : joueur i dessine le mot du joueur (i-1+n)%n
+     * Round 0 : joueur i → chaîne i        (son propre mot)
+     * Round 1 : joueur i → chaîne (i-1)%n  (mot du joueur précédent)
+     * Round 2 : joueur i → chaîne (i-2)%n
+     * etc.
+     */
     private getChainIndexForPlayer(playerId: string): number {
         const playerIndex = this.playerOrder.indexOf(playerId);
         if (playerIndex === -1) return -1;
         const n = this.playerOrder.length;
-        return (playerIndex + this.round) % n;
+        return (playerIndex - this.round + n * n) % n;
     }
 
     private currentEntryType(): "word" | "drawing" | "guess" {
@@ -299,22 +323,33 @@ export class Room {
     private send(playerId: string, msg: object): void {
         const player = this.players.get(playerId);
         if (!player) return;
-        try { player.ws.send(JSON.stringify(msg)); } catch { }
+        try {
+            player.ws.send(JSON.stringify(msg));
+        } catch { }
     }
 
     private broadcast(msg: object): void {
         this.players.forEach(player => {
-            try { player.ws.send(JSON.stringify(msg)); } catch { }
+            try {
+                player.ws.send(JSON.stringify(msg));
+            } catch { }
         });
     }
 
     private broadcastExcept(excludeId: string, msg: object): void {
         this.players.forEach((player, id) => {
             if (id === excludeId) return;
-            try { player.ws.send(JSON.stringify(msg)); } catch { }
+            try {
+                player.ws.send(JSON.stringify(msg));
+            } catch { }
         });
     }
 
-    get playerCount(): number { return this.players.size; }
-    get currentState(): GameState { return this.state; }
+    get playerCount(): number {
+        return this.players.size;
+    }
+
+    get currentState(): GameState {
+        return this.state;
+    }
 }
