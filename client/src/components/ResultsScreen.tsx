@@ -33,14 +33,15 @@ export default function ResultsScreen({ chains, onPlayAgain }: Props) {
                             {chain.entries.map((entry, j) => (
                                 <div key={j} className={`chain-entry entry-${entry.type}`}>
                                     <div className="entry-meta">
-                                        <span className="entry-author">
+                                        <p className="entry-author">
+                                            <span className="entry-type-badge">
+                                                {entry.type === "word" && "Mot de"}
+                                                {entry.type === "drawing" && "Dessin de "}
+                                                {entry.type === "guess" && "Interprétation"}
+                                            </span>
                                             {entry.pseudo}
-                                        </span>
-                                        <span className="entry-type-badge">
-                                            {entry.type === "word" && "Mot"}
-                                            {entry.type === "drawing" && "Dessin"}
-                                            {entry.type === "guess" && "Interprétation"}
-                                        </span>
+                                        </p>
+
                                     </div>
                                     {entry.type === "drawing" ? (
                                         <div className="entry-drawing">
