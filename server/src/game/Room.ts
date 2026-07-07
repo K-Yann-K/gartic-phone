@@ -54,7 +54,28 @@ export class Room {
             payload: { playerId, pseudo: player.pseudo }
         });
 
+        if (this.state === GameState.WORD_SELECTION) {
+            // Phase mot : on recalculera playerOrder à la fin sur ceux qui ont soumis.
+            // Il suffit de vérifier si tout le monde restant a soumis.
+            this.checkAllSubmitted();
+            if (this.players.size < 2) this.resetToWaiting();
+            return;
+        }
+
         if (this.state !== GameState.WAITING && this.state !== GameState.RESULTS) {
+            // Phases dessin/devinette : injecter une entrée vide si pas encore soumis
+            if (!player.submittedThisRound) {
+                const chainIndex = this.getChainIndexForPlayer(playerId);
+                if (chainIndex !== -1) {
+                    this.chains[chainIndex].push({
+                        playerId,
+                        pseudo: player.pseudo,
+                        type: this.currentEntryType(),
+                        content: this.currentEntryType() === "drawing" ? "" : "(joueur déconnecté)"
+                    });
+                    player.submittedThisRound = true;
+                }
+            }
             this.checkAllSubmitted();
         }
 
@@ -155,6 +176,10 @@ export class Room {
 
     private checkAllSubmitted(): void {
         const active = this.activePlayers();
+        if (active.length < 2) {
+            this.resetToWaiting();
+            return;
+        }
         const allDone = active.every(p => p.submittedThisRound);
         if (allDone) {
             this.advanceRound();
@@ -163,11 +188,15 @@ export class Room {
 
     private advanceRound(): void {
         this.clearTimer();
+
+        // Fin de la phase mots : figer playerOrder sur ceux qui ont soumis
+        if (this.round === 0) {
+            this.freezePlayerOrder();
+        }
+
         this.round++;
 
-        const totalRounds = this.playerOrder.length;
-
-        if (this.round >= totalRounds) {
+        if (this.round >= this.playerOrder.length) {
             this.showResults();
             return;
         }
@@ -184,6 +213,26 @@ export class Room {
         }
     }
 
+    /**
+     * Fige playerOrder et chains sur les joueurs qui ont effectivement soumis un mot.
+     * Les joueurs déconnectés pendant la phase mot sont simplement ignorés.
+     */
+    private freezePlayerOrder(): void {
+        const submitters = this.playerOrder.filter(id => {
+            const player = this.players.get(id);
+            return player && player.submittedThisRound;
+        });
+
+        const newChains: ChainEntry[][] = [];
+        for (const id of submitters) {
+            const oldIndex = this.playerOrder.indexOf(id);
+            newChains.push(this.chains[oldIndex] ?? []);
+        }
+
+        this.playerOrder = submitters;
+        this.chains = newChains;
+    }
+
     private startDrawingPhase(): void {
         this.activePlayers().forEach(player => {
             const chainIndex = this.getChainIndexForPlayer(player.id);
@@ -191,11 +240,12 @@ export class Room {
             const chain = this.chains[chainIndex];
             const lastEntry = chain[chain.length - 1];
 
+            if (!lastEntry) return;
+
             this.send(player.id, {
                 type: "PHASE_DRAWING",
                 payload: {
-                    // ✅ Fix : "wordToDraw" au lieu de "prompt"
-                    wordToDraw: lastEntry.content,
+                    wordToDraw: lastEntry.content || "(mot manquant)",
                     timeLeft: DRAWING_TIME
                 }
             });
@@ -217,10 +267,11 @@ export class Room {
             const chain = this.chains[chainIndex];
             const lastEntry = chain[chain.length - 1];
 
+            if (!lastEntry) return;
+
             this.send(player.id, {
                 type: "PHASE_GUESSING",
                 payload: {
-                    // ✅ Fix : "drawingUrl" au lieu de "dataUrl"
                     drawingUrl: lastEntry.content,
                     timeLeft: GUESSING_TIME
                 }
@@ -241,7 +292,6 @@ export class Room {
         this.clearTimer();
 
         const result = this.chains.map(chain => ({
-            // ✅ Fix : "startWord" + "steps" pour matcher App.tsx PHASE_RESULTS
             startWord: chain[0]?.content ?? "",
             steps: chain.map(e => ({
                 playerPseudo: e.pseudo,
@@ -250,7 +300,6 @@ export class Room {
             }))
         }));
 
-        // ✅ Fix : "PHASE_RESULTS" au lieu de "RESULTS"
         this.broadcast({
             type: "PHASE_RESULTS",
             payload: { chains: result }
@@ -287,13 +336,6 @@ export class Room {
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
-    /**
-     * ✅ Fix rotation : joueur i dessine le mot du joueur (i-1+n)%n
-     * Round 0 : joueur i → chaîne i        (son propre mot)
-     * Round 1 : joueur i → chaîne (i-1)%n  (mot du joueur précédent)
-     * Round 2 : joueur i → chaîne (i-2)%n
-     * etc.
-     */
     private getChainIndexForPlayer(playerId: string): number {
         const playerIndex = this.playerOrder.indexOf(playerId);
         if (playerIndex === -1) return -1;
