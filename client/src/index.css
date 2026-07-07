@@ -414,6 +414,27 @@ body {
     padding: 40px;
 }
 
+.color-palette {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.color-swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+}
+
+.color-swatch.selected {
+    border-color: #000;
+    transform: scale(1.2);
+    box-shadow: 0 0 0 2px #fff inset;
+}
+
 /* ─── Timer ────────────────────────────────────────────────────────────────── */
 .timer {
     display: flex;

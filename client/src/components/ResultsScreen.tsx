@@ -35,7 +35,7 @@ export default function ResultsScreen({ chains, onPlayAgain }: Props) {
                                     <div className="entry-meta">
                                         <p className="entry-author">
                                             <span className="entry-type-badge">
-                                                {entry.type === "word" && "Mot de"}
+                                                {entry.type === "word" && "Mot de "}
                                                 {entry.type === "drawing" && "Dessin de "}
                                                 {entry.type === "guess" && "Interprétation"}
                                             </span>
