@@ -31,9 +31,6 @@ export default function WaitingRoom({ players, myId, isReady, onReady }: Props) 
                 <div className="players-list">
                     {players.map(player => (
                         <div key={player.id} className={`player-card ${player.ready ? "ready" : ""}`}>
-                            <span className="player-avatar">
-                                {player.pseudo.charAt(0).toUpperCase()}
-                            </span>
                             <span className="player-name">
                                 {player.pseudo}
                                 {player.id === myId && <span className="you-tag"> (toi)</span>}

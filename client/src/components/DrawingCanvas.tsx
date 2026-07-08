@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { Pencil, Square, Circle, Triangle } from "lucide-react";
+import { Pencil, Square, Circle, Triangle, Eraser } from "lucide-react";
 
 interface Props {
     prompt: string;
@@ -15,7 +15,7 @@ const COLORS = [
     "#7f8c8d", "#c0392b", "#d35400", "#8e44ad",
 ];
 
-type Shape = "pencil" | "rectangle" | "ellipse" | "triangle";
+type Tool = "pencil" | "rectangle" | "ellipse" | "triangle" | "eraser";
 
 export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, waitingCount }: Props) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -23,7 +23,8 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
     const [isDrawing, setIsDrawing] = useState(false);
     const [color, setColor] = useState("#1a1a1a");
     const [brushSize, setBrushSize] = useState(4);
-    const [shape, setShape] = useState<Shape>("pencil");
+    const [tool, setTool] = useState<Tool>("pencil");
+    const [eraserSize, setEraserSize] = useState(20);
     const [timeRemaining, setTimeRemaining] = useState(timeLeft);
     const startPos = useRef<{ x: number; y: number } | null>(null);
     const lastPos = useRef<{ x: number; y: number } | null>(null);
@@ -69,8 +70,7 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
         setIsDrawing(true);
         startPos.current = pos;
         lastPos.current = pos;
-        // on redessine à chaque mousemove (forme)
-        if (shape !== "pencil") {
+        if (tool !== "pencil" && tool !== "eraser") {
             snapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
         }
     };
@@ -83,7 +83,33 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
         const ctx = canvas.getContext("2d")!;
         const pos = getPos(e, canvas);
 
-        if (shape === "pencil") {
+        if (tool === "eraser") {
+            ctx.save();
+            ctx.globalCompositeOperation = "destination-out";
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, eraserSize / 2, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(0,0,0,1)";
+            ctx.fill();
+            // Tracer aussi entre lastPos et pos pour ne pas avoir de trous
+            if (lastPos.current) {
+                ctx.beginPath();
+                ctx.moveTo(lastPos.current.x, lastPos.current.y);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.lineWidth = eraserSize;
+                ctx.lineCap = "round";
+                ctx.strokeStyle = "rgba(0,0,0,1)";
+                ctx.stroke();
+            }
+            ctx.restore();
+            // Remettre du blanc là où on a effacé (canvas fond blanc)
+            ctx.save();
+            ctx.globalCompositeOperation = "destination-over";
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
+            lastPos.current = pos;
+
+        } else if (tool === "pencil") {
             const last = lastPos.current;
             if (!last) return;
             ctx.beginPath();
@@ -95,8 +121,8 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
             ctx.lineJoin = "round";
             ctx.stroke();
             lastPos.current = pos;
+
         } else {
-            // Restaurer le snapshot pour ne pas accumuler les formes en cours de tracé
             if (snapshotRef.current) {
                 ctx.putImageData(snapshotRef.current, 0, 0);
             }
@@ -108,20 +134,16 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
             ctx.lineWidth = brushSize;
             ctx.beginPath();
 
-            if (shape === "rectangle") {
+            if (tool === "rectangle") {
                 ctx.strokeRect(start.x, start.y, w, h);
-
-            } else if (shape === "ellipse") {
+            } else if (tool === "ellipse") {
                 ctx.ellipse(
-                    start.x + w / 2,
-                    start.y + h / 2,
-                    Math.abs(w / 2),
-                    Math.abs(h / 2),
+                    start.x + w / 2, start.y + h / 2,
+                    Math.abs(w / 2), Math.abs(h / 2),
                     0, 0, Math.PI * 2
                 );
                 ctx.stroke();
-
-            } else if (shape === "triangle") {
+            } else if (tool === "triangle") {
                 ctx.moveTo(start.x + w / 2, start.y);
                 ctx.lineTo(start.x + w, start.y + h);
                 ctx.lineTo(start.x, start.y + h);
@@ -152,11 +174,18 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
         onSubmit(canvas.toDataURL("image/png"));
     }, [onSubmit]);
 
-    const SHAPES: { id: Shape; label: React.ReactNode }[] = [
-    { id: "pencil", label: <Pencil size={20} /> },
-    { id: "rectangle", label: <Square size={20} /> },
-    { id: "ellipse", label: <Circle size={20} /> },
-    { id: "triangle", label: <Triangle size={20} /> },
+    const getCursor = () => {
+        if (tool === "eraser") return "cell";
+        if (tool === "pencil") return "crosshair";
+        return "cell";
+    };
+
+    const TOOLS: { id: Tool; label: React.ReactNode }[] = [
+        { id: "pencil",    label: <Pencil size={20} /> },
+        { id: "rectangle", label: <Square size={20} /> },
+        { id: "ellipse",   label: <Circle size={20} /> },
+        { id: "triangle",  label: <Triangle size={20} /> },
+        { id: "eraser",    label: <Eraser size={20} /> },
     ];
 
     if (submitted) {
@@ -200,7 +229,7 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
                     onTouchStart={startDraw}
                     onTouchMove={draw}
                     onTouchEnd={stopDraw}
-                    style={{ cursor: shape === "pencil" ? "crosshair" : "cell" }}
+                    style={{ cursor: getCursor() }}
                 />
             </div>
 
@@ -216,36 +245,60 @@ export default function DrawingCanvas({ prompt, timeLeft, onSubmit, submitted, w
                     ))}
                 </div>
 
-                <div className="shape-picker">
-                    {SHAPES.map(s => (
-                        <button
-                            key={s.id}
-                            className={`shape-btn ${shape === s.id ? "selected" : ""}`}
-                            onClick={() => setShape(s.id)}
-                            title={s.id}
-                        >
-                            {s.label}
-                        </button>
-                    ))}
-                </div>
+                <div className="toolbar-row">
+                    <div className="shape-picker">
+                        {TOOLS.map(t => (
+                            <button
+                                key={t.id}
+                                className={`shape-btn ${tool === t.id ? "selected" : ""}`}
+                                onClick={() => setTool(t.id)}
+                                title={t.id}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
+                    </div>
 
-                <div className="brush-sizes">
-                    {[2, 4, 8, 16].map(size => (
-                        <button
-                            key={size}
-                            className={`brush-btn ${brushSize === size ? "selected" : ""}`}
-                            onClick={() => setBrushSize(size)}
-                        >
-                            <span style={{
-                                display: "block",
-                                width: size * 2,
-                                height: size * 2,
-                                borderRadius: "50%",
-                                background: color,
-                                margin: "auto"
-                            }} />
-                        </button>
-                    ))}
+                    {tool === "eraser" ? (
+                        <div className="eraser-slider">
+                            <label>
+                                Rayon : <strong>{eraserSize}px</strong>
+                            </label>
+                            <input
+                                type="range"
+                                min={4}
+                                max={80}
+                                value={eraserSize}
+                                onChange={e => setEraserSize(Number(e.target.value))}
+                            />
+                            <span
+                                className="eraser-preview"
+                                style={{
+                                    width: eraserSize,
+                                    height: eraserSize,
+                                }}
+                            />
+                        </div>
+                    ) : (
+                        <div className="brush-sizes">
+                            {[2, 4, 8, 16].map(size => (
+                                <button
+                                    key={size}
+                                    className={`brush-btn ${brushSize === size ? "selected" : ""}`}
+                                    onClick={() => setBrushSize(size)}
+                                >
+                                    <span style={{
+                                        display: "block",
+                                        width: size * 2,
+                                        height: size * 2,
+                                        borderRadius: "50%",
+                                        background: color,
+                                        margin: "auto"
+                                    }} />
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="toolbar-actions">
